@@ -1,0 +1,211 @@
+export type Language = 
+  | 'en' | 'hi' | 'gu' | 'as' | 'bn' | 'brx' | 'doi' | 'kn' | 'ks' | 'kok' 
+  | 'mai' | 'ml' | 'mni' | 'mr' | 'ne' | 'or' | 'pa' | 'sa' | 'sat' | 'sd' 
+  | 'ta' | 'te' | 'ur' | 'ras' | 'bhp' | 'har' | 'tcy' | 'cgh';
+
+const rawTranslations = {
+  en: {
+    nav: {
+      dashboard: "Home Dashboard",
+      questions: "Daily Questions",
+      signals: "Daily Signals",
+      voice: "Voice Analysis (P2)",
+      wellness: "My Wellness",
+      twin: "Mental Health Twin",
+      interventions: "Intervention Engine",
+      progress: "Progress (P2)",
+      reports: "Reports (P2)",
+      settings: "Settings",
+      logout: "Log Out"
+    },
+    app: {
+      tagline: "The Intelligence That Feels What Others Cannot.",
+      title: "Mental Wellness Operating System",
+      welcomeBack: "Welcome back",
+      overallScore: "Overall Wellness Score",
+      aiSummary: "AI Mental State Summary",
+      todayTasks: "Today's Recovery Tasks",
+      quickStats: "Quick Telemetry Stats",
+      recentActivity: "Recent Activity Feed",
+      typingTest: "Cognitive Latency & Typing Test",
+      startTyping: "Type the paragraph below to measure speed, accuracy, and keystroke latency.",
+      wpm: "Words Per Minute",
+      accuracy: "Accuracy",
+      latency: "Key Latency",
+      errors: "Errors",
+      screenTime: "Screen Time",
+      sleepDuration: "Sleep Duration",
+      sleepQuality: "Sleep Quality",
+      steps: "Daily Steps",
+      socialMinutes: "Social Activity",
+      socialQuality: "Social Interaction Quality",
+      submitSignals: "Submit Daily Signals",
+      saveProfile: "Save Profile Settings",
+      privacySettings: "Privacy & Data Security",
+      consentMarketing: "Allow telemetry analysis for Mental Health Twin updates",
+      consentSharing: "Share anonymized signals for global research",
+      exportData: "Export My Telemetry Data",
+      deleteAccount: "Delete My Account & History",
+      dpdpNotice: "DPDP Act, 2023 Compliance Notice: In accordance with India's Digital Personal Data Protection Act, you have the right to withdraw consent, request erasure (right to be forgotten), and export your behavioral signals at any time. Your telemetry is processed locally on this device.",
+      crisisHeader: "Need Immediate Help?",
+      crisisSub: "If you are experiencing severe distress or thoughts of self-harm, please connect with these confidential resources immediately:",
+      interventionsHeader: "Intelligent Recovery Interventions",
+      twinHeader: "Mental Health Twin Blueprint",
+      twinSub: "Your digital behavioral avatar, mapping cognitive features against historical baselines.",
+      featureImportance: "Feature Importances (SHAP)",
+      driftAnalysis: "Timeline & Behavioral Drift",
+      chatbotTitle: "SentienceX Assistant",
+      chatbotPlaceholder: "Ask me about your wellness score...",
+      chatbotCrisisAlert: "CRISIS ALERT: Please contact NIMHANS (1800-891-4416) or iCall (9152987821) immediately. You are not alone."
+    },
+    auth: {
+      login: "Sign In",
+      register: "Create Account",
+      email: "Email Address",
+      password: "Password",
+      google: "Continue with Google",
+      apple: "Continue with Apple",
+      noAccount: "Don't have an account?",
+      haveAccount: "Already have an account?"
+    }
+  },
+  hi: {
+    nav: {
+      dashboard: "मुख्य डैशबोर्ड",
+      questions: "दैनिक प्रश्न",
+      signals: "दैनिक संकेत",
+      voice: "आवाज विश्लेषण (P2)",
+      wellness: "मेरी भलाई",
+      twin: "मानसिक स्वास्थ्य ट्विन",
+      interventions: "हस्तक्षेप इंजन",
+      progress: "प्रगति (P2)",
+      reports: "रिपोर्ट (P2)",
+      settings: "सेटिंग्स",
+      logout: "लॉग आउट"
+    },
+    app: {
+      tagline: "वह बुद्धिमत्ता जो महसूस करती है जो दूसरे नहीं कर पाते।",
+      title: "मानसिक कल्याण ऑपरेटिंग सिस्टम",
+      welcomeBack: "आपका स्वागत है",
+      overallScore: "कुल कल्याण स्कोर",
+      aiSummary: "एआई मानसिक स्थिति सारांश",
+      todayTasks: "आज के सुधार कार्य",
+      quickStats: "त्वरित टेलीमेट्री आँकड़े",
+      recentActivity: "हाल की गतिविधि फ़ीड",
+      typingTest: "संज्ञानात्मक विलंबता और टाइपिंग परीक्षण",
+      startTyping: "गति, सटीकता और कीस्ट्रोक विलंबता को मापने के लिए नीचे दिए गए पैराग्राफ को टाइप करें।",
+      wpm: "शब्द प्रति मिनट",
+      accuracy: "सटीकता",
+      latency: "कीस्ट्रोक विलंबता",
+      errors: "त्रुटियाँ",
+      screenTime: "स्क्रीन समय",
+      sleepDuration: "नींद की अवधि",
+      sleepQuality: "नींद की गुणवत्ता",
+      steps: "दैनिक कदम",
+      socialMinutes: "सामाजिक गतिविधि",
+      socialQuality: "सामाजिक संपर्क गुणवत्ता",
+      submitSignals: "दैनिक संकेत जमा करें",
+      saveProfile: "प्रोफ़ाइल सेटिंग्स सहेजें",
+      privacySettings: "गोपनीयता और डेटा सुरक्षा",
+      consentMarketing: "मानसिक स्वास्थ्य ट्विन अपडेट के लिए टेलीमेट्री विश्लेषण की अनुमति दें",
+      consentSharing: "वैश्विक अनुसंधान के लिए अज्ञात संकेत साझा करें",
+      exportData: "मेरा टेलीमेट्री डेटा निर्यात करें",
+      deleteAccount: "मेरा खाता और इतिहास हटाएं",
+      dpdpNotice: "DPDP अधिनियम, 2023 अनुपालन सूचना: भारत के डिजिटल व्यक्तिगत डेटा संरक्षण अधिनियम के अनुसार, आपको किसी भी समय सहमति वापस लेने, डेटा मिटाने (भूल जाने का अधिकार) और अपने व्यवहारिक संकेतों को निर्यात करने का अधिकार है। आपकी टेलीमेट्री इस डिवाइस पर स्थानीय रूप से संसाधित होती है।",
+      crisisHeader: "तत्काल सहायता की आवश्यकता है?",
+      crisisSub: "यदि आप गंभीर संकट या आत्म-नुकसान के विचारों का अनुभव कर रहे हैं, तो कृपया तुरंत इन गोपनीय संसाधनों से संपर्क करें:",
+      interventionsHeader: "बुद्धिमान सुधार हस्तक्षेप",
+      twinHeader: "मानसिक स्वास्थ्य ट्विन ब्लूप्रिंट",
+      twinSub: "आपका डिजिटल व्यवहार अवतार, ऐतिहासिक आधार रेखाओं के खिलाफ संज्ञानात्मक विशेषताओं का मानचित्रण।",
+      featureImportance: "विशेषता महत्व (SHAP)",
+      driftAnalysis: "समयरेखा और व्यवहारिक बहाव",
+      chatbotTitle: "सेंटीएंसएक्स सहायक",
+      chatbotPlaceholder: "मुझसे अपने कल्याण स्कोर के बारे में पूछें...",
+      chatbotCrisisAlert: "संकट चेतावनी: कृपया तुरंत निमहंस (1800-891-4416) या आईकॉल (9152987821) से संपर्क करें। आप अकेले नहीं हैं।"
+    },
+    auth: {
+      login: "साइन इन करें",
+      register: "खाता बनाएं",
+      email: "ईमेल पता",
+      password: "पासवर्ड",
+      google: "Google के साथ जारी रखें",
+      apple: "Apple के साथ जारी रखें",
+      noAccount: "खाता नहीं है?",
+      haveAccount: "पहले से ही एक खाता है?"
+    }
+  },
+  gu: {
+    nav: {
+      dashboard: "હોમ ડેશબોર્ડ",
+      questions: "દૈનિક પ્રશ્નો",
+      signals: "દૈનિક સંકેતો",
+      voice: "અવાજ વિશ્લેષણ (P2)",
+      wellness: "મારી સુખાકારી",
+      twin: "માનસિક સ્વાસ્થ્ય ટ્વિન",
+      interventions: "હસ્તક્ષેપ એન્જિન",
+      progress: "પ્રગતિ (P2)",
+      reports: "અહેવાલો (P2)",
+      settings: "સેટિંગ્સ",
+      logout: "લોગ આઉટ"
+    },
+    app: {
+      tagline: "એ બુદ્ધિ જે અનુભવે છે જે અન્ય લોકો કરી શકતા નથી.",
+      title: "માનસિક સુખાકારી ઓપરેટિંગ સિસ્ટમ",
+      welcomeBack: "આપનું સ્વાગત છે",
+      overallScore: "કુલ સુખાકારી સ્કોર",
+      aiSummary: "AI માનસિક સ્થિતિ સારાંશ",
+      todayTasks: "આજના સુધારણા કાર્યો",
+      quickStats: "ઝડપી ટેલિમેટ્રી આંકડા",
+      recentActivity: "તાજેતરની પ્રવૃત્તિ ફીડ",
+      typingTest: "જ્ઞાનાત્મક વિલંબ અને ટાઇપિંગ ટેસ્ટ",
+      startTyping: "ઝડપ, ચોકસાઈ અને કીસ્ટ્રોક વિલંબને માપવા માટે નીચે આપેલા ફકરાને ટાઇપ કરો.",
+      wpm: "શબ્દો પ્રતિ મિનિટ",
+      accuracy: "ચોકસાઈ",
+      latency: "કીસ્ટ્રોક વિલંબ",
+      errors: "ભૂલો",
+      screenTime: "સ્ક્રીન સમય",
+      sleepDuration: "ઊંઘનો સમયગાળો",
+      sleepQuality: "ઊંઘની ગુણવત્તા",
+      steps: "દૈનિક પગલાં",
+      socialMinutes: "સામાજિક પ્રવૃત્તિ",
+      socialQuality: "સામાજિક ક્રિયાપ્રતિક્રિયા ગુણવત્તા",
+      submitSignals: "દૈનિક સંકેતો સબમિટ કરો",
+      saveProfile: "પ્રોફાઇલ સેટિંગ્સ સાચવો",
+      privacySettings: "ગોપનીયતા અને ડેટા સુરક્ષા",
+      consentMarketing: "માનસિક સ્વાસ્થ્ય ટ્વિન અપડેટ્સ માટે ટેલિમેટ્રી વિશ્લેષણની મંજૂરી આપો",
+      consentSharing: "વૈશ્વિક સંશોધન માટે અનામી સંકેતો શેર કરો",
+      exportData: "મારો ટેલિમેટ્રી ડેટા નિકાસ કરો",
+      deleteAccount: "મારું ખાતું અને ઇતિહાસ કાઢી નાખો",
+      dpdpNotice: "DPDP એક્ટ, 2023 પાલન સૂચના: ભારતના ડિજिटल પર્સનલ ડેટા પ્રોટેક્શન એક્ટ અનુસાર, તમને કોઈપણ સમયે સંમતિ પાછી ખેંચવાનો, ડેટા ભૂંસી નાખવાનો (ભૂલી જવાનો અધિકાર) અને તમારા વર્તણૂકીય સંકેતો નિકાસ કરવાનો અધિકાર છે. તમારી ટેલિમેટ્રી આ ઉપકરણ પર સ્થાનિક રીતે પ્રક્રિયા થાય છે.",
+      crisisHeader: "તાત્કાલિક મદદની જરૂર છે?",
+      crisisSub: "જો તમે ગંભીર તકલીફ અથવા સ્વ-નુકસानના વિચારો અનુભવી રહ્યા છો, તો કૃપા કરીને આ ગુપ્ત સંસાધનો સાથે તરત જ જોડાઓ:",
+      interventionsHeader: "બુદ્ધિશાળી સુધારણા હસ્તક્ષેપ",
+      twinHeader: "માનસિક સ્વાસ્થ્ય ટ્વિન બ્લુપ્રિન્ટ",
+      twinSub: "તમારો ડિજિટલ વર્તણૂક અવતાર, ઐતિહાસિક આધારરેખાઓ સામે જ્ઞાનાત્મક વિશેષતાઓનું મેપિંગ.",
+      featureImportance: "વિશેષતા મહત્વ (SHAP)",
+      driftAnalysis: "સમયરેખા અને વર્તણૂકીય પ્રવાહ",
+      chatbotTitle: "સેન્ટિએન્સએક્સ સહાયક",
+      chatbotPlaceholder: "મને તમારા વેલનેસ સ્કોર વિશે પૂછો...",
+      chatbotCrisisAlert: "કટોકटी ચેતવણી: કૃપા કરીને તરત જ નિમહંસ (1800-891-4416) અથવા આઈકૉલ (9152987821) નો સંપર્ક કરો. તમે એકલા નથી."
+    },
+    auth: {
+      login: "સાઇન ઇન કરો",
+      register: "ખાતું બનાવો",
+      email: "ઇમેઇલ સરનામું",
+      password: "પાસવર્ડ",
+      google: "Google સાથે ચાલુ રાખો",
+      apple: "Apple સાથે ચાલુ રાખો",
+      noAccount: "ખાતું નથી?",
+      haveAccount: "પહેલેથી જ ખાતું છે?"
+    }
+  }
+};
+
+export const translations = new Proxy(rawTranslations, {
+  get: (target, prop: string) => {
+    if (prop in target) {
+      return target[prop as keyof typeof target];
+    }
+    return target.en;
+  }
+}) as unknown as Record<Language, typeof rawTranslations.en>;

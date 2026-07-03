@@ -1,0 +1,172 @@
+{
+  "features": [
+    "typing_speed",
+    "typing_accuracy",
+    "typing_latency",
+    "typing_errors",
+    "sleep_duration",
+    "sleep_quality",
+    "steps",
+    "screen_time",
+    "social_minutes",
+    "social_quality",
+    "question_affect"
+  ],
+  "targets": [
+    "stress",
+    "burnout",
+    "anxiety",
+    "motivation",
+    "loneliness",
+    "cognitive_fatigue",
+    "overall_wellness"
+  ],
+  "metrics": {
+    "stress": {
+      "r2": 0.9766085243553324,
+      "mae": 3.19234866399765,
+      "rmse": 4.040759314670107
+    },
+    "burnout": {
+      "r2": 0.9744734106623504,
+      "mae": 3.3943037665176385,
+      "rmse": 4.410902402292097
+    },
+    "anxiety": {
+      "r2": 0.9599630593339039,
+      "mae": 3.832200498657227,
+      "rmse": 4.976859129548385
+    },
+    "motivation": {
+      "r2": 0.9799915672836645,
+      "mae": 2.8553274481201174,
+      "rmse": 3.7467465895438505
+    },
+    "loneliness": {
+      "r2": 0.9748785087308742,
+      "mae": 2.980650843715668,
+      "rmse": 3.8771853180171916
+    },
+    "cognitive_fatigue": {
+      "r2": 0.9619512880431117,
+      "mae": 3.271805058078766,
+      "rmse": 4.115964532552911
+    },
+    "overall_wellness": {
+      "r2": 0.9920009999773437,
+      "mae": 1.9260706636428833,
+      "rmse": 2.4305191613476764
+    }
+  },
+  "importances": {
+    "stress": {
+      "screen_time": 0.5361422300338745,
+      "sleep_duration": 0.157571941614151,
+      "social_quality": 0.0825951099395752,
+      "steps": 0.06980881094932556,
+      "sleep_quality": 0.06778138130903244,
+      "typing_latency": 0.05244069918990135,
+      "question_affect": 0.023617450147867203,
+      "social_minutes": 0.0062746829353272915,
+      "typing_errors": 0.0016487787943333387,
+      "typing_speed": 0.0011092378990724683,
+      "typing_accuracy": 0.001009783591143787
+    },
+    "burnout": {
+      "sleep_quality": 0.6238394975662231,
+      "screen_time": 0.21660073101520538,
+      "sleep_duration": 0.06158021464943886,
+      "steps": 0.04144035279750824,
+      "typing_latency": 0.031228605657815933,
+      "social_quality": 0.009851791895925999,
+      "question_affect": 0.004016964230686426,
+      "typing_errors": 0.003988667391240597,
+      "typing_accuracy": 0.0032610108610242605,
+      "social_minutes": 0.0032272825483232737,
+      "typing_speed": 0.0009648162522353232
+    },
+    "anxiety": {
+      "sleep_quality": 0.5870615839958191,
+      "social_quality": 0.20817695558071136,
+      "typing_latency": 0.08841089904308319,
+      "social_minutes": 0.042235251516103745,
+      "screen_time": 0.03541242331266403,
+      "question_affect": 0.013872765935957432,
+      "sleep_duration": 0.010946649126708508,
+      "steps": 0.008286555297672749,
+      "typing_accuracy": 0.003933819010853767,
+      "typing_speed": 0.0010305502219125628,
+      "typing_errors": 0.0006324761197902262
+    },
+    "motivation": {
+      "social_quality": 0.6383627653121948,
+      "steps": 0.1696493923664093,
+      "sleep_quality": 0.13199397921562195,
+      "typing_latency": 0.018477842211723328,
+      "screen_time": 0.01718730665743351,
+      "question_affect": 0.015956224873661995,
+      "social_minutes": 0.0072334036231040955,
+      "sleep_duration": 0.00030476879328489304,
+      "typing_speed": 0.0002971466747112572,
+      "typing_accuracy": 0.00028827806818298995,
+      "typing_errors": 0.00024875844246707857
+    },
+    "loneliness": {
+      "social_quality": 0.849134624004364,
+      "screen_time": 0.0716605857014656,
+      "social_minutes": 0.03881969675421715,
+      "question_affect": 0.01501504611223936,
+      "typing_latency": 0.013179613277316093,
+      "steps": 0.007586347404867411,
+      "sleep_quality": 0.0032871421426534653,
+      "sleep_duration": 0.0005575799732469022,
+      "typing_speed": 0.00037169514689594507,
+      "typing_accuracy": 0.00021516390552278608,
+      "typing_errors": 0.00017247811774723232
+    },
+    "cognitive_fatigue": {
+      "sleep_quality": 0.505544126033783,
+      "sleep_duration": 0.26009488105773926,
+      "steps": 0.08853256702423096,
+      "typing_latency": 0.06274833530187607,
+      "screen_time": 0.05789988860487938,
+      "typing_errors": 0.01531159970909357,
+      "question_affect": 0.0031989989802241325,
+      "social_minutes": 0.0030071591027081013,
+      "typing_accuracy": 0.001596256741322577,
+      "typing_speed": 0.0013615981442853808,
+      "social_quality": 0.0007044787053018808
+    },
+    "overall_wellness": {
+      "social_quality": 0.45394203066825867,
+      "screen_time": 0.2295251488685608,
+      "sleep_quality": 0.11861773580312729,
+      "steps": 0.10566190630197525,
+      "typing_latency": 0.04560389369726181,
+      "question_affect": 0.017819225788116455,
+      "sleep_duration": 0.013977325521409512,
+      "social_minutes": 0.010362418368458748,
+      "typing_accuracy": 0.003105238312855363,
+      "typing_errors": 0.0010860066395252943,
+      "typing_speed": 0.0002990702341776341
+    }
+  },
+  "observed_min": {
+    "stress": 11.71296501159668,
+    "burnout": 7.091370582580566,
+    "anxiety": 18.357643127441406,
+    "motivation": 16.217947006225586,
+    "loneliness": 10.546695709228516,
+    "cognitive_fatigue": 8.96068286895752,
+    "overall_wellness": 2.149932384490967
+  },
+  "observed_max": {
+    "stress": 101.35953521728516,
+    "burnout": 100.5534439086914,
+    "anxiety": 100.57249450683594,
+    "motivation": 100.57423400878906,
+    "loneliness": 101.08512878417969,
+    "cognitive_fatigue": 99.33685302734375,
+    "overall_wellness": 95.59796142578125
+  }
+}
