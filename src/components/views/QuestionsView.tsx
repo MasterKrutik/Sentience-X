@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useWellnessStore } from '../../store/useWellnessStore';
 import { translations } from '../../utils/i18n';
 import { GlassCard } from '../ui/GlassCard';
@@ -39,8 +39,16 @@ const CLINICAL_OPTIONS = [
 export function QuestionsView() {
   const { 
     questions, answerQuestion, submitQuestions, language, 
-    questionsSubmittedToday, predictions, groundTruth, submitGroundTruth 
+    questionsSubmittedToday, predictions, groundTruth, submitGroundTruth,
+    refreshDailyQuestionsIfStale
   } = useWellnessStore();
+
+  // Defensive daily refresh: if the user left the tab open overnight,
+  // calling this ensures the next navigation to this view gets a fresh set.
+  useEffect(() => {
+    refreshDailyQuestionsIfStale();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [activeSubTab, setActiveSubTab] = useState<'daily' | 'clinical'>('daily');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -115,25 +123,17 @@ export function QuestionsView() {
     }, 1500);
   };
 
-  const getLikertLabel = (id: number, val: number) => {
-    if ([6, 7, 8, 9].includes(id)) {
-      switch(val) {
-        case 1: return "Not at all";
-        case 2: return "Mildly";
-        case 3: return "Moderately";
-        case 4: return "Frequently";
-        case 5: return "Severely / Very High";
-        default: return "";
-      }
-    } else {
-      switch(val) {
-        case 1: return "Poor / None";
-        case 2: return "Low";
-        case 3: return "Moderate";
-        case 4: return "Good";
-        case 5: return "Optimal / Very High";
-        default: return "";
-      }
+  // Likert label — framing is always 1=least/5=most from the user's perspective.
+  // Score inversion for negatively-framed questions is handled server-side in the
+  // affect computation, NOT here. Using a single neutral scale keeps the UI simple.
+  const getLikertLabel = (_id: number, val: number) => {
+    switch(val) {
+      case 1: return "Not at all / Never";
+      case 2: return "Slightly / Rarely";
+      case 3: return "Moderately";
+      case 4: return "Mostly / Often";
+      case 5: return "Completely / Always";
+      default: return "";
     }
   };
 

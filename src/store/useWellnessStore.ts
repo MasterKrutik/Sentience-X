@@ -45,6 +45,7 @@ export interface WellnessState {
   // Questions
   questions: Question[];
   questionsSubmittedToday: boolean;
+  questionsDate: string | null;   // ISO date of the last getDailyQuestions() call
   
   // Clinical Ground Truth (PHQ-9 & GAD-7)
   groundTruth: {
@@ -98,6 +99,7 @@ export interface WellnessState {
   submitSignals: () => Promise<void>;
   answerQuestion: (id: number, value: number) => void;
   submitQuestions: () => Promise<void>;
+  refreshDailyQuestionsIfStale: () => void;
   submitGroundTruth: (phq9: number, gad7: number) => Promise<void>;
   setIsOnboarding: (val: boolean) => void;
   incrementStreak: () => void;
@@ -124,18 +126,66 @@ const DEFAULT_SIGNALS: WellnessSignals = {
   social_quality: 3
 };
 
-const DEFAULT_QUESTIONS: Question[] = [
-  { id: 1, textEn: "How calm and relaxed did you feel during stressful moments today?", textHi: "आज तनावपूर्ण क्षणों के दौरान आप कितने शांत और सहज महसूस कर रहे थे?", textGu: "આજે તણાવની ક્ષણો દરમિયાન તમે કેટલા શાંત અને હળવા અનુભવતા હતા?", value: null },
-  { id: 2, textEn: "How restful and restorative was your sleep last night?", textHi: "कल रात आपकी नींद कितनी आरामदायक और ताज़ा करने वाली थी?", textGu: "ગઈકાલે રાત્રે તમારી ઊંઘ કેટલી આરામદાયક અને તાજગી આપનારી હતી?", value: null },
-  { id: 3, textEn: "How motivated did you feel to complete your scheduled tasks today?", textHi: "आज अपने निर्धारित कार्यों को पूरा करने के लिए आप कितना प्रेरित महसूस कर रहे थे?", textGu: "આજે તમારા નિર્ધારિત કાર્યો પૂર્ણ કરવા માટે તમે કેટલા પ્રેરિત અનુભવતા હતા?", value: null },
-  { id: 4, textEn: "Did you feel connected and supported in your interactions with others today?", textHi: "क्या आज दूसरों के साथ बातचीत में आपने जुड़ाव और समर्थन महसूस किया?", textGu: "શું आप आज अन्यो साथेनी वातचीतमं जोडान अने टेको अनुभव्यो?", value: null },
-  { id: 5, textEn: "How energetic and physically fit did you feel today?", textHi: "आज आप कितना ऊर्जावान और शारीरिक रूप से फिट महसूस कर रहे थे?", textGu: "આજે તમે કેટલા ઉર્જાવાન અને શારીરિક રીતે ફિટ અનુભવતા હતા?", value: null },
-  { id: 6, textEn: "To what extent did you feel overwhelmed by your professional or daily commitments today?", textHi: "आज आप अपनी पेशेवर या दैनिक प्रतिबद्धताओं से किस हद तक अभिभूत महसूस कर रहे थे?", textGu: "આજે તમે તમારી વ્યાવસાયિક કે દૈનિક જવાબદારીઓથી કેટલા અંશે ભરાઈ ગયેલા અનુભવતા હતા?", value: null },
-  { id: 7, textEn: "How frequently did you experience difficulties focusing on tasks today?", textHi: "आज आपको कार्यों पर ध्यान केंद्रित करने में कितनी बार कठिनाइयों का सामना करना पड़ा?", textGu: "આજે તમને કાર્યો પર ધ્યાન કેન્દ્રિત કરવામાં કેટલી વાર મુશ્કેલીઓનો સામનો કરવો પડ્યો?", value: null },
-  { id: 8, textEn: "How often did you feel a sense of loneliness or isolation today?", textHi: "आज आपने कितनी बार अकेलेपन या अलगाव की भावना महसूस की?", textGu: "આજે તમે કેટલી વાર એકલતા અથવા અલગताની લાગણી અનુભવી?", value: null },
-  { id: 9, textEn: "How would you rate your level of anxiety or apprehension about upcoming events today?", textHi: "आज आने वाली घटनाओं के बारे में आपकी चिंता या आशंका का स्तर क्या था?", textGu: "આજે આગામી ઘટનાઓ વિશે તમારી ચિંતા અથવા આશંકાનું સ્તર શું હતું?", value: null },
-  { id: 10, textEn: "Did you take time for self-reflection or mindfulness today?", textHi: "क्या आपने आज आत्म-चिंतन या ध्यान के लिए समय निकाला?", textGu: "શું તમે આજે આત્મ-ચિંતન અથવા ધ્યાન માટે સમય કાઢ્યો?", value: null }
+// --- 30-Question rotating bank (10 shown per day, date-seeded for consistency) ---
+// isNegative = true means a HIGH answer indicates poor wellness (inverted in affect calc)
+const QUESTION_BANK: (Omit<Question, 'value'> & { isNegative: boolean })[] = [
+  // Stress & Calm (positive framing)
+  { id: 1,  isNegative: false, textEn: "How calm and relaxed did you feel during stressful moments today?",          textHi: "आज तनावपूर्ण क्षणों में आप कितने शांत और सहज महसूस किए?",                 textGu: "આજે તણાવની ક્ષણોમાં તમે કેટલા શાંત અનુભવ્યા?" },
+  { id: 2,  isNegative: false, textEn: "How restful and restorative was your sleep last night?",                    textHi: "कल रात आपकी नींद कितनी आरामदायक और ताज़ादम करने वाली थी?",                 textGu: "ગઈ રાત્રે તમારી ઊઘ કેટલી તાજગી આપનારી હતી?" },
+  { id: 3,  isNegative: false, textEn: "How motivated did you feel to complete your scheduled tasks today?",         textHi: "आज अपने निर्धारित कार्यों को पूरा करने के लिए आप कितना प्रेरित महसूस किए?",textGu: "આજે તમારા કાર્યો પૂર્ણ કરવા કેટલો ઉત્સાહ અનુભવ્યો?" },
+  { id: 4,  isNegative: false, textEn: "Did you feel connected and supported in your interactions with others today?",textHi: "क्या आज दूसरों के साथ बातचीत में आपने जुड़ाव और समर्थन महसूस किया?",        textGu: "આજે અન્ય લોકો સાથે જોડાણ અને ટેકો અનુભવ્યો?" },
+  { id: 5,  isNegative: false, textEn: "How energetic and physically active did you feel today?",                    textHi: "आज आप कितना ऊर्जावान और शारीरिक रूप से सक्रिय महसूस किए?",                 textGu: "આજે તમે કેટલા ઉર્જાવાન અને સક્રિય અનુભવ્યા?" },
+  // Stress & Overwhelm (negative framing)
+  { id: 6,  isNegative: true,  textEn: "To what extent did you feel overwhelmed by your commitments today?",         textHi: "आज आप अपनी प्रतिबद्धताओं से किस हद तक अभिभूत महसूस किए?",                 textGu: "આજે તમે જવાબદારીઓથી કેટલા ભારે અનુભવ્યા?" },
+  { id: 7,  isNegative: true,  textEn: "How frequently did you experience difficulties focusing on tasks today?",      textHi: "आज कार्यों पर ध्यान केंद्रित करने में आपको कितनी बार कठिनाई हुई?",          textGu: "આજે ધ્યાન કેન્દ્રિત કરવામાં કેટલી વાર મુશ્કેલી અનુભવી?" },
+  { id: 8,  isNegative: true,  textEn: "How often did you feel a sense of loneliness or isolation today?",             textHi: "आज आपने कितनी बार अकेलेपन या अलगाव की भावना महसूस की?",                   textGu: "આજે એકલતા કે અલગタのઊ ભાવ કેટલી વાર અનુભવ્યો?" },
+  { id: 9,  isNegative: true,  textEn: "How would you rate your anxiety or apprehension about upcoming events today?",  textHi: "आज आने वाली घटनाओं के बारे में आपकी चिंता या आशंका का स्तर क्या था?",    textGu: "આજે ભવિષ્યની ઘટનાઓ અંગે ચિંતાનું સ્તર કેટલું હતું?" },
+  { id: 10, isNegative: false, textEn: "Did you take time for self-reflection or mindfulness today?",                  textHi: "क्या आज आपने आत्म-चिंतन या ध्यान के लिए समय निकाला?",                      textGu: "આજે આત્મ-ચિંતન અથવા ધ્યાન માટે સમય કાઢ્યો?" },
+  // Burnout & Recovery
+  { id: 11, isNegative: true,  textEn: "How drained or exhausted did you feel by the end of your workday?",           textHi: "कार्यदिवस के अंत में आप कितने थके हुए या थका हुआ महसूस किए?",              textGu: "કામના અંતે તમે કેટલા થાકેલા અનુભવ્યા?" },
+  { id: 12, isNegative: false, textEn: "How satisfied were you with your overall productivity today?",                 textHi: "आज अपनी समग्र उत्पादकता से आप कितने संतुष्ट थे?",                          textGu: "આજે તમારી ઉત્પાદકતાથી કેટલા સંતુષ્ટ રહ્યા?" },
+  { id: 13, isNegative: false, textEn: "Did you manage to take meaningful breaks during your work or study today?",    textHi: "क्या आज आपने अपने काम या अध्ययन के दौरान सार्थक ब्रेक लिए?",              textGu: "આજે કામ/અભ્યાસ દરમ્યાન અર્થपूर्ण વિરામ લીધો?" },
+  { id: 14, isNegative: true,  textEn: "How much did negative thoughts intrude on your focus today?",                  textHi: "आज नकारात्मक विचारों ने आपके ध्यान में कितना बाधा डाला?",                   textGu: "આજે નકારાત્મક વિચારોએ ધ્યાન ભ્રષ્ટ કેટલું કર્યું?" },
+  { id: 15, isNegative: false, textEn: "How effectively did you manage your time and priorities today?",                textHi: "आज आपने अपना समय और प्राथमिकताएं कितनी प्रभावी ढंग से प्रबंधित कीं?",     textGu: "આજે સમય અને અગ્રતાઓ કેટલી અસરકારક રીતે સંચાલિત કરી?" },
+  // Sleep & Physical
+  { id: 16, isNegative: false, textEn: "How well-rested and ready did you feel when you woke up this morning?",       textHi: "आज सुबह उठने पर आप कितना ताज़ा और तैयार महसूस किए?",                       textGu: "આજે સવારે ઉઠ્યા ત્યારે ઊઘ પૂરી થઈ હોય એવું અનુભવ્યું?" },
+  { id: 17, isNegative: false, textEn: "How much physical activity or movement did you get today?",                    textHi: "आज आपने कितनी शारीरिक गतिविधि या गति की?",                                   textGu: "આજે કેટલી શારીરિક પ્રવૃત્તિ કે ચળવળ રહ્યી?" },
+  { id: 18, isNegative: true,  textEn: "How much did physical discomfort (headache, tension) affect your day?",        textHi: "शारीरिक असुविधा (सिरदर्द, तनाव) ने आज आपके दिन को कितना प्रभावित किया?",   textGu: "શારીરિક અગ્વડ (માથાનો દુ:ખાવો, ખિંચ) આજ ના દિવસ पर कितना असर डाला?" },
+  { id: 19, isNegative: false, textEn: "How balanced and nutritious was your diet / eating today?",                   textHi: "आज आपका आहार/खान-पान कितना संतुलित और पोषक था?",                             textGu: "આજે ભોજન/ખોરાક કેટલો સંतુલિત અને પૌષ્ટિક હતો?" },
+  { id: 20, isNegative: false, textEn: "How well did you stay hydrated throughout the day?",                           textHi: "आज आप पूरे दिन कितने अच्छे से हाइड्रेटेड रहे?",                               textGu: "આખો દિવસ કેટલું સારું હાઇડ્રેટ રહ્યા?" },
+  // Social & Emotional
+  { id: 21, isNegative: false, textEn: "How positive and uplifting were your social interactions today?",               textHi: "आज आपकी सामाजिक बातचीत कितनी सकारात्मक और उत्साहजनक थी?",                  textGu: "આજે સામાજિક સંબંધ-ઓ કેટલા સ itis ckard-ful હ?" },
+  { id: 22, isNegative: true,  textEn: "How much did interpersonal conflict or tension drain your energy today?",       textHi: "आज पारस्परिक संघर्ष या तनाव ने आपकी ऊर्जा को कितना कम किया?",              textGu: "આંતર-વ્yak tic nik t ens ion  ??? ??? ??? ??? ??? ???" },
+  { id: 23, isNegative: false, textEn: "How much did you feel appreciated or valued by others today?",                  textHi: "आज आपको दूसरों द्वारा कितना सराहा और मूल्यवान महसूस किया?",                  textGu: "આજે અન્ય લોકો дру ??? kq da ??? c al  ??? ??? ??? ??? ??? ??? ??? ??? ???" },
+  { id: 24, isNegative: false, textEn: "How effectively did you express and manage your emotions today?",                textHi: "आज आपने अपनी भावनाओं को कितनी प्रभावी ढंग से व्यक्त और प्रबंधित किया?",    textGu: "આજે ભ????? ??? ??? ??? ??? ???" },
+  { id: 25, isNegative: false, textEn: "How much did you engage in activities that brought you genuine joy today?",      textHi: "आज आपने कितना समय उन गतिविधियों में बिताया जिनसे आपको वास्तविक खुशी मिलती है?",textGu: "આજ e ??? ??? ??? ??? ??? ??? ??? ??? ???" },
+  // Cognitive & Mindfulness
+  { id: 26, isNegative: false, textEn: "How clear and sharp did your thinking feel today?",                            textHi: "आज आपकी सोच कितनी स्पष्ट और तेज़ महसूस हुई?",                              textGu: "??? ??? ??? ??? ???" },
+  { id: 27, isNegative: true,  textEn: "How much did you experience mental fog or confusion today?",                    textHi: "आज आपने कितना मानसिक धुंध या भ्रम का अनुभव किया?",                         textGu: "??? ??? ??? ??? ??? ???" },
+  { id: 28, isNegative: false, textEn: "How well were you able to problem-solve or think creatively today?",            textHi: "आज आप समस्याओं को सुलझाने या रचनात्मक ढंग से सोचने में कितने सक्षम थे?",   textGu: "??? ??? ??? ??? ???" },
+  { id: 29, isNegative: false, textEn: "How present and mindful were you during routine activities today?",             textHi: "आज दैनिक गतिविधियों के दौरान आप कितने सचेत और जागरूक रहे?",                 textGu: "??? ??? ??? ??? ??? ???" },
+  { id: 30, isNegative: false, textEn: "How hopeful and optimistic did you feel about your future today?",               textHi: "आज अपने भविष्य के बारे में आप कितने आशावादी और सकारात्मक महसूस किए?",       textGu: "??? ??? ??? ??? ??? ???" },
 ];
+
+/**
+ * Returns 10 questions for today, seeded by date (YYYY-MM-DD).
+ * The same 10 questions appear all day; they change the next day.
+ * IDs 6-9 in the QUESTION_BANK use isNegative=true so affect calc inverts them.
+ */
+function getDailyQuestions(): Question[] {
+  const today = new Date().toISOString().slice(0, 10); // e.g. '2026-07-03'
+  // Simple deterministic seed from date string
+  let seed = today.split('-').reduce((acc, part) => acc + parseInt(part, 10), 0);
+  const shuffled = [...QUESTION_BANK];
+  // Fisher-Yates shuffle with seeded pseudo-random
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    seed = (seed * 1664525 + 1013904223) & 0xffffffff;
+    const j = Math.abs(seed) % (i + 1);
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled.slice(0, 10).map(q => ({ ...q, value: null }));
+}
+
 
 const DEFAULT_TASKS: Task[] = [
   { id: 1, text: "Perform 4-7-8 Breathing Exercise (5 minutes)", completed: false },
@@ -186,39 +236,75 @@ const setLocalStorageItem = (key: string, value: any) => {
 };
 
 export const useWellnessStore = create<WellnessState>((set, get) => {
+  const todayStr = new Date().toISOString().split('T')[0]; // e.g. '2026-07-03'
+
   // Initialize state from local storage or defaults
   const initialUser = getLocalStorageItem('sentiencex_user', null);
   const initialSignals = getLocalStorageItem('sentiencex_signals', DEFAULT_SIGNALS);
-  const initialQuestions = getLocalStorageItem('sentiencex_questions', DEFAULT_QUESTIONS);
+
+  // --- Fix 1: Question date-stamp + daily invalidation ---
+  // Load the date the current question set was generated. If it differs from today,
+  // regenerate questions and clear submitted flag so stale answers never replay.
+  const savedQuestionsDate: string | null = getLocalStorageItem('sentiencex_questions_date', null);
+  const savedQuestions = getLocalStorageItem('sentiencex_questions', null);
+  const questionsAreStale = savedQuestionsDate !== todayStr;
+
+  let resolvedInitialQuestions: Question[];
+  let resolvedQuestionsDate: string;
+  let resolvedQuestionsSubmitted: boolean;
+
+  if (!questionsAreStale && savedQuestions && savedQuestions.length > 0 && savedQuestions[0]?.textEn) {
+    // Same day — reuse saved questions (keeps answers the user already gave)
+    resolvedInitialQuestions = savedQuestions;
+    resolvedQuestionsDate = savedQuestionsDate!;
+    resolvedQuestionsSubmitted = getLocalStorageItem('sentiencex_questions_submitted', false);
+  } else {
+    // New day (or first ever load) — generate a fresh dated set, reset submission
+    resolvedInitialQuestions = getDailyQuestions();
+    resolvedQuestionsDate = todayStr;
+    resolvedQuestionsSubmitted = false;
+    setLocalStorageItem('sentiencex_questions', resolvedInitialQuestions);
+    setLocalStorageItem('sentiencex_questions_date', todayStr);
+    setLocalStorageItem('sentiencex_questions_submitted', false);
+  }
+
   const initialLanguage = getLocalStorageItem('sentiencex_lang', 'en');
   const initialConsentTelemetry = getLocalStorageItem('sentiencex_consent_telemetry', true);
   const initialConsentSharing = getLocalStorageItem('sentiencex_consent_sharing', false);
   const initialConsentVoice = getLocalStorageItem('sentiencex_consent_voice', false);
   const initialLastDeeperCheckIn = getLocalStorageItem('sentiencex_last_deeper_checkin', null);
-  const initialPredictions = getLocalStorageItem('sentiencex_predictions', DEFAULT_PREDICTIONS);
-  const initialPredictionSource = getLocalStorageItem('sentiencex_pred_source', 'local_approx');
   const initialTasks = getLocalStorageItem('sentiencex_tasks', DEFAULT_TASKS);
   const initialChat = getLocalStorageItem('sentiencex_chat', INITIAL_CHAT_MESSAGES);
-  const initialSignalsSubmitted = getLocalStorageItem('sentiencex_signals_submitted', false);
-  const initialQuestionsSubmitted = getLocalStorageItem('sentiencex_questions_submitted', false);
+  const initialSignalsSubmitted: boolean = getLocalStorageItem('sentiencex_signals_submitted', false);
   const initialGroundTruth = getLocalStorageItem('sentiencex_ground_truth', { phq9: null, gad7: null, lastSubmitted: null });
   const initialOnboarding = getLocalStorageItem('sentiencex_onboarding', false);
   const initialStreakCount = getLocalStorageItem('sentiencex_streak_count', 0);
   const initialLastSubDate = getLocalStorageItem('sentiencex_last_sub_date', null);
 
+  // --- Fix 4: Cold-start prediction gate ---
+  // Only show stored predictions if the user has actually submitted data at least once.
+  // If both submission flags are false AND no backend-sourced predictions exist,
+  // predictionSource stays null → dashboard renders the "Submit data" placeholder.
+  const hasSubmittedBefore: boolean = initialSignalsSubmitted || resolvedQuestionsSubmitted;
+  const initialPredictions = hasSubmittedBefore
+    ? getLocalStorageItem('sentiencex_predictions', DEFAULT_PREDICTIONS)
+    : DEFAULT_PREDICTIONS;
+  const initialPredictionSource: 'xgboost_server' | 'local_approx' | null = hasSubmittedBefore
+    ? getLocalStorageItem('sentiencex_pred_source', 'local_approx')
+    : null;
+
   // Helper to run predictions using current signals and questions
   const runPredictionsHelper = async (currentSignals: WellnessSignals, currentQuestions: Question[]) => {
     set({ isPredicting: true });
     
+    // Compute question_affect — invert negative-framed questions using isNegative field from bank
+    const bankMap = new Map(QUESTION_BANK.map(q => [q.id, q.isNegative]));
     let sum = 0;
     let count = 0;
     currentQuestions.forEach(q => {
       if (q.value !== null) {
-        if ([6, 7, 8, 9].includes(q.id)) {
-          sum += (6 - q.value); // Invert negative questions
-        } else {
-          sum += q.value;
-        }
+        const isNeg = bankMap.get(q.id) ?? false;
+        sum += isNeg ? (6 - q.value) : q.value;
         count++;
       }
     });
@@ -273,8 +359,9 @@ export const useWellnessStore = create<WellnessState>((set, get) => {
     language: initialLanguage,
     signals: initialSignals,
     signalsSubmittedToday: initialSignalsSubmitted,
-    questions: initialQuestions,
-    questionsSubmittedToday: initialQuestionsSubmitted,
+    questions: resolvedInitialQuestions,
+    questionsSubmittedToday: resolvedQuestionsSubmitted,
+    questionsDate: resolvedQuestionsDate,
     groundTruth: initialGroundTruth,
     isOnboarding: initialOnboarding,
     streakCount: initialStreakCount,
@@ -353,20 +440,32 @@ export const useWellnessStore = create<WellnessState>((set, get) => {
               const exportData = await exportRes.json();
               if (exportData.status === 'success' && exportData.history && exportData.history.length > 0) {
                 const latest = exportData.history[0];
+                // Determine if the synced data is from today (same ISO date)
+                const syncDate = latest.timestamp ? String(latest.timestamp).slice(0, 10) : null;
+                const isTodaysData = syncDate === new Date().toISOString().split('T')[0];
+                // Only restore synced questions if they are from today — never replay stale answers
+                const syncedQuestions = isTodaysData && latest.questions && latest.questions.length > 0
+                  ? latest.questions
+                  : get().questions;
+                const today = new Date().toISOString().split('T')[0];
                 set({
                   signals: latest.signals || get().signals,
-                  questions: latest.questions || get().questions,
+                  questions: syncedQuestions,
+                  questionsDate: today,
                   predictions: latest.predictions || get().predictions,
+                  predictionSource: 'xgboost_server',
                   groundTruth: latest.ground_truth || get().groundTruth,
-                  signalsSubmittedToday: true,
-                  questionsSubmittedToday: true
+                  signalsSubmittedToday: isTodaysData,
+                  questionsSubmittedToday: isTodaysData
                 });
                 setLocalStorageItem('sentiencex_signals', latest.signals || get().signals);
-                setLocalStorageItem('sentiencex_questions', latest.questions || get().questions);
+                setLocalStorageItem('sentiencex_questions', syncedQuestions);
+                setLocalStorageItem('sentiencex_questions_date', today);
                 setLocalStorageItem('sentiencex_predictions', latest.predictions || get().predictions);
+                setLocalStorageItem('sentiencex_pred_source', 'xgboost_server');
                 setLocalStorageItem('sentiencex_ground_truth', latest.ground_truth || get().groundTruth);
-                setLocalStorageItem('sentiencex_signals_submitted', true);
-                setLocalStorageItem('sentiencex_questions_submitted', true);
+                setLocalStorageItem('sentiencex_signals_submitted', isTodaysData);
+                setLocalStorageItem('sentiencex_questions_submitted', isTodaysData);
               }
             }
             return;
@@ -430,11 +529,30 @@ export const useWellnessStore = create<WellnessState>((set, get) => {
     },
 
     submitQuestions: async () => {
-      set({ questionsSubmittedToday: true });
+      const today = new Date().toISOString().split('T')[0];
+      set({ questionsSubmittedToday: true, questionsDate: today });
       setLocalStorageItem('sentiencex_questions_submitted', true);
+      setLocalStorageItem('sentiencex_questions_date', today);
       get().incrementStreak();
       await runPredictionsHelper(get().signals, get().questions);
       await get().syncWithBackend();
+    },
+
+    // Explicitly refresh the question set if today's date differs from stored date.
+    // Call this from any view that renders questions as a defensive guard.
+    refreshDailyQuestionsIfStale: () => {
+      const today = new Date().toISOString().split('T')[0];
+      if (get().questionsDate !== today) {
+        const freshQuestions = getDailyQuestions();
+        set({
+          questions: freshQuestions,
+          questionsDate: today,
+          questionsSubmittedToday: false
+        });
+        setLocalStorageItem('sentiencex_questions', freshQuestions);
+        setLocalStorageItem('sentiencex_questions_date', today);
+        setLocalStorageItem('sentiencex_questions_submitted', false);
+      }
     },
 
     submitGroundTruth: async (phq9: number, gad7: number) => {
@@ -575,7 +693,7 @@ export const useWellnessStore = create<WellnessState>((set, get) => {
         user: null,
         signals: DEFAULT_SIGNALS,
         signalsSubmittedToday: false,
-        questions: DEFAULT_QUESTIONS,
+        questions: getDailyQuestions(),
         questionsSubmittedToday: false,
         groundTruth: { phq9: null, gad7: null, lastSubmitted: null },
         predictions: DEFAULT_PREDICTIONS,
@@ -614,14 +732,15 @@ export const useWellnessStore = create<WellnessState>((set, get) => {
     },
 
     resetTelemetryToDefault: () => {
+      const dailyQs = getDailyQuestions();
       set({
         signals: DEFAULT_SIGNALS,
         signalsSubmittedToday: false,
-        questions: DEFAULT_QUESTIONS,
+        questions: dailyQs,
         questionsSubmittedToday: false
       });
       setLocalStorageItem('sentiencex_signals', DEFAULT_SIGNALS);
-      setLocalStorageItem('sentiencex_questions', DEFAULT_QUESTIONS);
+      setLocalStorageItem('sentiencex_questions', dailyQs);
       setLocalStorageItem('sentiencex_signals_submitted', false);
       setLocalStorageItem('sentiencex_questions_submitted', false);
     }

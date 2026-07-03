@@ -56,6 +56,7 @@ export function DashboardView() {
   
   const t = translations[language].app;
   const score = Math.round(predictions.overall_wellness);
+  const hasData = predictionSource !== null;
 
   // Modal Step States
   const [showCheckInModal, setShowCheckInModal] = useState(false);
@@ -474,17 +475,33 @@ export function DashboardView() {
           <h2 className="text-sm font-semibold tracking-wider text-slate-400 uppercase mb-6 z-10">
             {t.overallScore}
           </h2>
-          <VisualRing score={score} />
-          
-          <div className="mt-6 space-y-1 z-10">
-            <p className="text-xs text-slate-400">
-              Active telemetry indicates your cognitive speed is{" "}
-              <span className="font-semibold text-brand-cyan">{signals.typing_speed} WPM</span>.
-            </p>
-            <p className="text-[10px] text-slate-500 font-mono">
-              Inference updated today
-            </p>
-          </div>
+
+          {hasData ? (
+            <>
+              <VisualRing score={score} />
+              <div className="mt-6 space-y-1 z-10">
+                <p className="text-xs text-slate-400">
+                  Active telemetry indicates your cognitive speed is{" "}
+                  <span className="font-semibold text-brand-cyan">{signals.typing_speed} WPM</span>.
+                </p>
+                <p className="text-[10px] text-slate-500 font-mono">
+                  Inference updated today
+                </p>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-4 py-4 px-6 z-10">
+              <div className="w-24 h-24 rounded-full border-2 border-dashed border-white/10 flex items-center justify-center">
+                <BarChart2 className="w-10 h-10 text-slate-600" />
+              </div>
+              <div className="space-y-1.5 text-center">
+                <p className="text-xs font-semibold text-slate-300">No predictions yet</p>
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  Submit your Daily Signals or Daily Survey to generate your first wellness score.
+                </p>
+              </div>
+            </div>
+          )}
         </GlassCard>
 
         {/* AI summary and Today's Tasks */}
@@ -500,9 +517,22 @@ export function DashboardView() {
               {t.aiSummary}
             </h3>
             
-            <p className="text-sm text-slate-200 leading-relaxed font-medium">
-              {getAISummary()}
-            </p>
+            {hasData ? (
+              <p className="text-sm text-slate-200 leading-relaxed font-medium">
+                {getAISummary()}
+              </p>
+            ) : (
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-white/3 border border-white/5">
+                <AlertCircle className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Your Mental Twin has no telemetry yet. Submit your{" "}
+                  <button onClick={() => { window.location.hash = 'signals'; }} className="text-brand-cyan underline underline-offset-2 cursor-pointer">Daily Signals</button>{" "}
+                  or{" "}
+                  <button onClick={() => { window.location.hash = 'questions'; }} className="text-brand-cyan underline underline-offset-2 cursor-pointer">Daily Survey</button>{" "}
+                  to activate AI-driven wellness analysis.
+                </p>
+              </div>
+            )}
           </GlassCard>
 
           {/* Today's Tasks */}
@@ -542,59 +572,67 @@ export function DashboardView() {
           {t.quickStats}
         </h2>
         
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        {hasData ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
           
-          <div className="p-4 rounded-2xl glass-panel border border-white/5 text-slate-100 flex flex-col justify-between h-28 hover:border-brand-purple/20 transition-all">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Keyboard className="w-3 h-3" /> WPM Speed
-            </span>
-            <div>
-              <div className="text-2xl font-bold tracking-tight text-slate-100">{signals.typing_speed}</div>
-              <span className="text-[9px] text-green-400">Baseline optimal</span>
+            <div className="p-4 rounded-2xl glass-panel border border-white/5 text-slate-100 flex flex-col justify-between h-28 hover:border-brand-purple/20 transition-all">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Keyboard className="w-3 h-3" /> WPM Speed
+              </span>
+              <div>
+                <div className="text-2xl font-bold tracking-tight text-slate-100">{signals.typing_speed}</div>
+                <span className="text-[9px] text-green-400">Baseline optimal</span>
+              </div>
             </div>
-          </div>
 
-          <div className="p-4 rounded-2xl glass-panel border border-white/5 text-slate-100 flex flex-col justify-between h-28 hover:border-brand-purple/20 transition-all">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Keyboard className="w-3 h-3" /> Key Latency
-            </span>
-            <div>
-              <div className="text-2xl font-bold tracking-tight text-slate-100">{signals.typing_latency}<span className="text-xs font-normal text-slate-500">ms</span></div>
-              <span className="text-[9px] text-slate-400">Cognitive delay index</span>
+            <div className="p-4 rounded-2xl glass-panel border border-white/5 text-slate-100 flex flex-col justify-between h-28 hover:border-brand-purple/20 transition-all">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Keyboard className="w-3 h-3" /> Key Latency
+              </span>
+              <div>
+                <div className="text-2xl font-bold tracking-tight text-slate-100">{signals.typing_latency}<span className="text-xs font-normal text-slate-500">ms</span></div>
+                <span className="text-[9px] text-slate-400">Cognitive delay index</span>
+              </div>
             </div>
-          </div>
 
-          <div className="p-4 rounded-2xl glass-panel border border-white/5 text-slate-100 flex flex-col justify-between h-28 hover:border-brand-purple/20 transition-all">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Moon className="w-3 h-3" /> Sleep Duration
-            </span>
-            <div>
-              <div className="text-2xl font-bold tracking-tight text-slate-100">{signals.sleep_duration}<span className="text-xs font-normal text-slate-500">h</span></div>
-              <span className="text-[9px] text-slate-400">Sleep quality: {signals.sleep_quality}%</span>
+            <div className="p-4 rounded-2xl glass-panel border border-white/5 text-slate-100 flex flex-col justify-between h-28 hover:border-brand-purple/20 transition-all">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Moon className="w-3 h-3" /> Sleep Duration
+              </span>
+              <div>
+                <div className="text-2xl font-bold tracking-tight text-slate-100">{signals.sleep_duration}<span className="text-xs font-normal text-slate-500">h</span></div>
+                <span className="text-[9px] text-slate-400">Sleep quality: {signals.sleep_quality}%</span>
+              </div>
             </div>
-          </div>
 
-          <div className="p-4 rounded-2xl glass-panel border border-white/5 text-slate-100 flex flex-col justify-between h-28 hover:border-brand-purple/20 transition-all">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Flame className="w-3 h-3" /> Daily Steps
-            </span>
-            <div>
-              <div className="text-2xl font-bold tracking-tight text-slate-100">{signals.steps.toLocaleString()}</div>
-              <span className="text-[9px] text-green-400">Activity target active</span>
+            <div className="p-4 rounded-2xl glass-panel border border-white/5 text-slate-100 flex flex-col justify-between h-28 hover:border-brand-purple/20 transition-all">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Flame className="w-3 h-3" /> Daily Steps
+              </span>
+              <div>
+                <div className="text-2xl font-bold tracking-tight text-slate-100">{signals.steps.toLocaleString()}</div>
+                <span className="text-[9px] text-green-400">Activity target active</span>
+              </div>
             </div>
-          </div>
 
-          <div className="col-span-2 md:col-span-4 lg:col-span-1 p-4 rounded-2xl glass-panel border border-white/5 text-slate-100 flex flex-col justify-between h-28 hover:border-brand-purple/20 transition-all">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Clock className="w-3 h-3" /> Screen Time
-            </span>
-            <div>
-              <div className="text-2xl font-bold tracking-tight text-slate-100">{signals.screen_time}<span className="text-xs font-normal text-slate-500">h</span></div>
-              <span className="text-[9px] text-slate-400">Total phone + desktop</span>
+            <div className="col-span-2 md:col-span-4 lg:col-span-1 p-4 rounded-2xl glass-panel border border-white/5 text-slate-100 flex flex-col justify-between h-28 hover:border-brand-purple/20 transition-all">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Clock className="w-3 h-3" /> Screen Time
+              </span>
+              <div>
+                <div className="text-2xl font-bold tracking-tight text-slate-100">{signals.screen_time}<span className="text-xs font-normal text-slate-500">h</span></div>
+                <span className="text-[9px] text-slate-400">Total phone + desktop</span>
+              </div>
             </div>
-          </div>
 
-        </div>
+          </div>
+        ) : (
+          <div className="p-6 rounded-2xl border border-dashed border-white/8 bg-white/2 text-center">
+            <p className="text-xs text-slate-500">
+              Signal data will appear here after your first submission.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Model Information Panel / Under the Hood */}

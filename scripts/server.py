@@ -392,67 +392,230 @@ def predict(data: TelemetryInput):
 def counsel(req: CounselRequest):
     msg = req.message.lower().strip()
     predictions = req.predictions
-    
-    # 1. Crisis Check
+
+    # Extract metrics
+    stress        = round(predictions.get('stress', 35.0), 1)
+    burnout       = round(predictions.get('burnout', 30.0), 1)
+    anxiety       = round(predictions.get('anxiety', 40.0), 1)
+    motivation    = round(predictions.get('motivation', 65.0), 1)
+    loneliness    = round(predictions.get('loneliness', 35.0), 1)
+    cog_fatigue   = round(predictions.get('cognitive_fatigue', 30.0), 1)
+    wellness      = round(predictions.get('overall_wellness', 70.0), 1)
+
+    # ── 1. Crisis check ──────────────────────────────────────────────
     crisis_keywords = [
-        'suicide', 'kill myself', 'die', 'self harm', 'cut myself', 
-        'end my life', 'hurt myself', 'death', 'depression', 'depressed'
+        'suicide', 'kill myself', 'end my life', 'die', 'self harm',
+        'cut myself', 'hurt myself', 'death', 'depressed', 'hopeless',
+        'want to disappear', 'can\'t go on'
     ]
     if any(kw in msg for kw in crisis_keywords):
         return {
-            "response": "It sounds like you are going through an incredibly difficult time. Please know that you are not alone, and there is support available. I cannot provide clinical crisis counseling, but please reach out immediately: NIMHANS Support Helpline at 1800-891-4416 (24/7) or iCall at 9152987821. Both services are free and confidential.",
+            "response": (
+                "It sounds like you are going through an incredibly difficult time. "
+                "Please know that you are not alone and help is available right now. "
+                "I am not able to provide clinical crisis support, but please reach out immediately:\n\n"
+                "• NIMHANS Support Helpline: 1800-891-4416 (24/7, free)\n"
+                "• iCall: 9152987821 (Mon–Sat, 8 AM – 10 PM)\n"
+                "• Vandrevala Foundation: 1860-2662-345 (24/7)\n\n"
+                "You matter and support is waiting for you."
+            ),
             "is_crisis": True
         }
 
-    # Extract metrics for context
-    stress = round(predictions.get('stress', 35.0), 1)
-    burnout = round(predictions.get('burnout', 30.0), 1)
-    anxiety = round(predictions.get('anxiety', 40.0), 1)
-    motivation = round(predictions.get('motivation', 65.0), 1)
-    loneliness = round(predictions.get('loneliness', 35.0), 1)
-    cognitive_fatigue = round(predictions.get('cognitive_fatigue', 30.0), 1)
-    overall_wellness = round(predictions.get('overall_wellness', 70.0), 1)
+    # ── 2. Sleep ──────────────────────────────────────────────────────
+    if any(kw in msg for kw in ['sleep', 'insomnia', 'tired', 'exhausted', 'rest', 'fatigue', 'slept']):
+        if 'bad' in msg or 'poor' in msg or 'badly' in msg or 'couldn\'t' in msg or 'can\'t sleep' in msg:
+            return {"response": (
+                f"I'm sorry to hear you slept poorly. Sleep is the single most impactful lever for your wellness. "
+                f"Your current cognitive fatigue score is {cog_fatigue}/100 and overall wellness is {wellness}/100 — "
+                f"poor sleep directly drives both up. Tonight, try this: switch all screens off 60 minutes before bed, "
+                f"keep the room below 22°C, and try the 4-7-8 breathing technique (inhale 4s, hold 7s, exhale 8s). "
+                f"Even one night of improved sleep can reduce stress ({stress}/100) by 10-15 points."
+            ), "is_crisis": False}
+        return {"response": (
+            f"Sleep quality is central to your wellness. Currently your overall wellness is {wellness}/100 "
+            f"and cognitive fatigue is {cog_fatigue}/100. "
+            f"For most adults, 7–9 hours of consistent sleep is optimal. "
+            f"Reducing screen time before bed and maintaining a fixed wake time — even on weekends — "
+            f"are the two highest-impact habits you can build. Would you like tips on a wind-down routine?"
+        ), "is_crisis": False}
 
-    # 2. Match distinct test prompts
-    if "slept badly" in msg or "sleep badly" in msg or "bad sleep" in msg or "slept poor" in msg:
-        return {
-            "response": f"I'm sorry to hear that you slept badly. Sleep quality is key to your wellness. Your current telemetry reflects an overall wellness score of {overall_wellness}/100 and stress at {stress}/100. Poor sleep directly elevates cognitive fatigue ({cognitive_fatigue}/100). To recover, I suggest winding down without screens 1 hour before bed tonight.",
-            "is_crisis": False
-        }
-    
-    if "feel fine today" in msg or "feel fine" in msg or "i feel good" in msg:
-        return {
-            "response": f"It's great that you feel fine today! Your overall wellness index is looking strong at {overall_wellness}/100, supported by a healthy motivation score of {motivation}/100. Maintaining a consistent physical activity and screen time routine will help preserve this positive state.",
-            "is_crisis": False
-        }
+    # ── 3. Stress ──────────────────────────────────────────────────────
+    if any(kw in msg for kw in ['stress', 'stressed', 'overwhelm', 'pressure', 'too much', 'tense']):
+        level = "high" if stress > 65 else "moderate" if stress > 40 else "low"
+        advice = (
+            "Your stress level is elevated. I'd recommend the 4-7-8 breathing technique immediately, "
+            "followed by writing down the 3 most pressing tasks and doing them in order — "
+            "this restores a sense of control which directly lowers cortisol."
+            if stress > 65 else
+            "Your stress is at a moderate level. Short breaks every 90 minutes (the Pomodoro method) "
+            "and a 15-minute outdoor walk can measurably reduce it."
+            if stress > 40 else
+            "Your stress markers look stable. Maintaining your current routine of balanced screen time and sleep is working well."
+        )
+        return {"response": (
+            f"Your predicted stress score is {stress}/100 ({level} range). {advice} "
+            f"Your burnout risk is currently {burnout}/100 — "
+            f"these two dimensions are closely linked, so reducing stress also protects against burnout."
+        ), "is_crisis": False}
 
-    if "burnout score mean" in msg or "what does my burnout score" in msg:
-        return {
-            "response": f"Your current predicted burnout score is {burnout}/100. This score indicates your risk of professional and physical exhaustion, computed using your typing latency, error rates, sleep patterns, and self-reported answers. A score below 50 is stable, whereas higher scores indicate you should prioritize rest and screen-free intervals.",
-            "is_crisis": False
-        }
+    # ── 4. Burnout ──────────────────────────────────────────────────────
+    if any(kw in msg for kw in ['burnout', 'burn out', 'drained', 'empty', 'no energy', 'depleted', 'exhausted']):
+        return {"response": (
+            f"Your burnout risk score is {burnout}/100. "
+            f"Burnout develops gradually when chronic stress ({stress}/100) combines with poor recovery. "
+            f"The primary contributors in your profile are "
+            f"{'high screen time and low sleep' if cog_fatigue > 55 else 'sustained high workload without adequate breaks'}. "
+            f"Recovery requires active rest — not just sleep, but activities that genuinely recharge you (social connection, nature, hobbies). "
+            f"If your score exceeds 70, please consider speaking with an occupational therapist or counselor."
+        ), "is_crisis": False}
 
-    # 3. Dynamic context-sensitive counseling based on highest telemetry risk
-    risks = {
-        "stress": stress,
-        "burnout": burnout,
-        "anxiety": anxiety,
-        "loneliness": loneliness,
-        "cognitive fatigue": cognitive_fatigue
-    }
-    highest_risk_name = max(risks, key=risks.get)
-    highest_risk_val = risks[highest_risk_name]
+    # ── 5. Anxiety ──────────────────────────────────────────────────────
+    if any(kw in msg for kw in ['anxious', 'anxiety', 'nervous', 'worry', 'panic', 'scared', 'fear', 'apprehension']):
+        return {"response": (
+            f"Your predicted anxiety level is {anxiety}/100. "
+            f"Anxiety often spikes when uncertainty is high and perceived control is low. "
+            f"Practical steps: (1) Write down your worries — externalization reduces their psychological weight. "
+            f"(2) Practice box breathing: 4 seconds in, 4 hold, 4 out, 4 hold. "
+            f"(3) Limit news and social media consumption, especially in the evening. "
+            f"Your loneliness score is {loneliness}/100 — social isolation amplifies anxiety, "
+            f"so reaching out to even one trusted person today can help."
+        ), "is_crisis": False}
 
-    if highest_risk_val > 50:
-        return {
-            "response": f"Thank you for sharing. I notice your overall wellness is at {overall_wellness}/100, and your telemetry indicates elevated {highest_risk_name} ({highest_risk_val}/100). I suggest looking at your Intervention Engine, taking short offline breaks, and practicing deep breathing exercises today.",
-            "is_crisis": False
-        }
+    # ── 6. Motivation / Productivity ──────────────────────────────────
+    if any(kw in msg for kw in ['motivation', 'motivate', 'productive', 'productivity', 'procrastinat', 'lazy', 'no drive', 'stuck']):
+        return {"response": (
+            f"Your motivation index is {motivation}/100. "
+            f"{'Your motivation is strong — capitalize on this by tackling the most cognitively demanding task first.' if motivation > 70 else 'Motivation at this level typically responds well to small wins: break your biggest task into 15-minute chunks and reward each completion.'} "
+            f"Note that your sleep quality and physical activity (steps) are the two strongest predictors of motivation in your telemetry profile. "
+            f"Stress ({stress}/100) and cognitive fatigue ({cog_fatigue}/100) are currently the main drag factors."
+        ), "is_crisis": False}
 
-    return {
-        "response": f"Hello! I am your AI Counselor. Based on your current telemetry profile, your overall wellness index is stable at {overall_wellness}/100. Your stress is at {stress}/100 and motivation is at {motivation}/100. How can I support your mental wellness goals today?",
-        "is_crisis": False
-    }
+    # ── 7. Loneliness / Social ──────────────────────────────────────────
+    if any(kw in msg for kw in ['lonely', 'loneliness', 'alone', 'isolated', 'no friends', 'social', 'connection']):
+        return {"response": (
+            f"Your loneliness score is {loneliness}/100. "
+            f"{'Loneliness at this level has measurable effects on stress and immune function. Even brief, genuine interactions matter more than long superficial ones.' if loneliness > 60 else 'Your social connection metrics look reasonable.'} "
+            f"One evidence-based habit: reach out to one person per day with a specific, low-pressure message (a meme, an article, a shared memory). "
+            f"Your social interaction minutes are a tracked signal — increasing them consistently will directly improve your wellness score over time."
+        ), "is_crisis": False}
+
+    # ── 8. Cognitive fatigue / Focus ──────────────────────────────────
+    if any(kw in msg for kw in ['focus', 'concentrate', 'distract', 'brain fog', 'mental fog', 'can\'t think', 'cognitive', 'attention']):
+        return {"response": (
+            f"Your cognitive fatigue score is {cog_fatigue}/100. "
+            f"{'At this level, sustained deep work is very difficult — switch to lower-stakes tasks and rest.' if cog_fatigue > 65 else 'Mild cognitive fatigue is manageable.'} "
+            f"The top causes in your profile: sleep below 7 hours, screen time above 7 hours, and low physical activity. "
+            f"Try the 20-20-20 rule: every 20 minutes, look at something 20 feet away for 20 seconds. "
+            f"Even a 5-minute walk raises prefrontal cortex activity measurably."
+        ), "is_crisis": False}
+
+    # ── 9. Exercise / Physical ──────────────────────────────────────────
+    if any(kw in msg for kw in ['exercise', 'walk', 'steps', 'run', 'workout', 'gym', 'physical', 'active']):
+        return {"response": (
+            f"Physical activity is one of the strongest wellness levers in your profile. "
+            f"Your current overall wellness is {wellness}/100 and motivation is {motivation}/100. "
+            f"Even 20–30 minutes of walking per day raises motivation scores by 8–12 points on average in this model. "
+            f"Start small: a 15-minute outdoor walk after lunch is enough to begin shifting your telemetry. "
+            f"Track your steps — the model is directly sensitive to the steps signal you log daily."
+        ), "is_crisis": False}
+
+    # ── 10. Screen time / Digital ──────────────────────────────────────
+    if any(kw in msg for kw in ['screen', 'phone', 'social media', 'instagram', 'doom scroll', 'screen time']):
+        return {"response": (
+            f"Screen time is one of the top stress drivers in the SentienceX model. "
+            f"It correlates directly with sleep quality degradation and cognitive fatigue ({cog_fatigue}/100). "
+            f"The model's training data shows that screen time above 8 hours daily correlates with a 15-point drop in wellness scores. "
+            f"Practical steps: set app timers, keep the phone out of the bedroom, and replace the last 30 minutes before sleep with reading or journaling."
+        ), "is_crisis": False}
+
+    # ── 11. Score / Wellness explanation ──────────────────────────────
+    if any(kw in msg for kw in ['score', 'wellness', 'why is', 'what does', 'explain', 'index', 'low', 'high', 'number', 'metric', 'predict']):
+        risks = {'Stress': stress, 'Burnout': burnout, 'Anxiety': anxiety, 'Loneliness': loneliness, 'Cognitive Fatigue': cog_fatigue}
+        top_risk = max(risks, key=risks.get)
+        return {"response": (
+            f"Your Overall Wellness Index is {wellness}/100. "
+            f"This score is a weighted combination of: Motivation ({motivation}/100), "
+            f"and the inverse of Stress ({stress}/100), Burnout ({burnout}/100), "
+            f"Anxiety ({anxiety}/100), Loneliness ({loneliness}/100), and Cognitive Fatigue ({cog_fatigue}/100). "
+            f"Your highest-risk dimension right now is **{top_risk}** ({risks[top_risk]}/100). "
+            f"Improving that dimension will have the largest impact on your overall score. "
+            f"Scores above 80 are excellent; 60–80 moderate; below 60 requires active intervention."
+        ), "is_crisis": False}
+
+    # ── 12. Breathing / Mindfulness ────────────────────────────────────
+    if any(kw in msg for kw in ['breathing', 'breathe', 'meditation', 'mindful', 'calm down', 'relax', 'meditat']):
+        return {"response": (
+            f"Great choice. Breathing exercises are clinically validated for acute stress relief. "
+            f"With your stress at {stress}/100, try this right now: "
+            f"Sit comfortably, inhale for 4 seconds, hold for 7 seconds, exhale slowly for 8 seconds. "
+            f"Repeat 4 cycles. This activates the parasympathetic nervous system and reduces cortisol within minutes. "
+            f"For longer-term mindfulness, even 5–10 minutes of daily meditation reduces anxiety ({anxiety}/100) significantly over 2–4 weeks."
+        ), "is_crisis": False}
+
+    # ── 13. Nutrition / Diet ────────────────────────────────────────────
+    if any(kw in msg for kw in ['eat', 'food', 'diet', 'nutrition', 'hungry', 'water', 'hydrat', 'meal']):
+        return {"response": (
+            f"Nutrition significantly impacts cognitive function and mood. "
+            f"With your cognitive fatigue at {cog_fatigue}/100, ensure you're well-hydrated (2.5–3L water daily) "
+            f"and eating protein-rich meals to maintain neurotransmitter production. "
+            f"Avoid heavy meals within 3 hours of sleep — they reduce sleep quality which is your wellness foundation. "
+            f"Magnesium-rich foods (nuts, leafy greens) are especially beneficial for anxiety reduction."
+        ), "is_crisis": False}
+
+    # ── 14. Gratitude / Positive ────────────────────────────────────────
+    if any(kw in msg for kw in ['gratitude', 'grateful', 'positive', 'good', 'happy', 'joy', 'feel great', 'feel good', 'feel fine']):
+        return {"response": (
+            f"That's great to hear! Your wellness index is at {wellness}/100 and motivation at {motivation}/100. "
+            f"Positive emotional states are worth reinforcing. A daily gratitude practice — writing 3 specific things you're grateful for — "
+            f"has been shown to sustain motivation and reduce baseline anxiety over time. "
+            f"Keep logging your signals consistently so the model continues to reflect your actual state."
+        ), "is_crisis": False}
+
+    # ── 15. Weekly / Summary ────────────────────────────────────────────
+    if any(kw in msg for kw in ['week', 'summary', 'overview', 'progress', 'trend', 'history', 'how am i doing']):
+        risks = {'stress': stress, 'burnout': burnout, 'anxiety': anxiety, 'loneliness': loneliness, 'cognitive_fatigue': cog_fatigue}
+        top_risk = max(risks, key=risks.get)
+        return {"response": (
+            f"Current wellness snapshot: Overall Wellness {wellness}/100 | Stress {stress}/100 | "
+            f"Burnout {burnout}/100 | Anxiety {anxiety}/100 | Motivation {motivation}/100 | "
+            f"Loneliness {loneliness}/100 | Cognitive Fatigue {cog_fatigue}/100. "
+            f"Your primary area of concern is {top_risk.replace('_', ' ')} at {risks[top_risk]}/100. "
+            f"Submit your daily signals and questions consistently to build a meaningful trend history — "
+            f"the model improves in accuracy as it receives more of your behavioral data."
+        ), "is_crisis": False}
+
+    # ── 16. Capabilities / What can you do ─────────────────────────────
+    if any(kw in msg for kw in ['what can you', 'help me', 'how do you', 'capabilities', 'what do you', 'how does this work']):
+        return {"response": (
+            "I am your SentienceX AI Wellness Counselor. Here's what I can help with:\n\n"
+            "• Explain your wellness scores (stress, burnout, anxiety, motivation, loneliness, cognitive fatigue)\n"
+            "• Give personalized advice based on your current telemetry\n"
+            "• Suggest evidence-based recovery techniques (breathing, sleep, exercise)\n"
+            "• Provide crisis helpline contacts if you need immediate support\n"
+            "• Explain what affects your overall wellness score\n\n"
+            "Try asking: 'Why is my stress high?', 'What should I do to sleep better?', or 'Summarize my wellness.'"
+        ), "is_crisis": False}
+
+    # ── 17. Generic dynamic fallback ────────────────────────────────────
+    risks = {'stress': stress, 'burnout': burnout, 'anxiety': anxiety, 'loneliness': loneliness, 'cognitive_fatigue': cog_fatigue}
+    top_risk_name = max(risks, key=risks.get)
+    top_risk_val = risks[top_risk_name]
+
+    if top_risk_val > 55:
+        return {"response": (
+            f"Thanks for reaching out. Based on your current telemetry, your overall wellness is {wellness}/100. "
+            f"Your highest concern right now is {top_risk_name.replace('_', ' ')} at {top_risk_val}/100. "
+            f"I'd suggest focusing on that dimension first — would you like specific advice on managing "
+            f"{top_risk_name.replace('_', ' ')}?"
+        ), "is_crisis": False}
+
+    return {"response": (
+        f"Your wellness index looks stable at {wellness}/100. "
+        f"Stress: {stress}/100 | Motivation: {motivation}/100 | Anxiety: {anxiety}/100. "
+        f"What aspect of your mental wellness would you like to explore today? "
+        f"You can ask about your scores, sleep, stress, burnout, focus, breathing techniques, or anything else on your mind."
+    ), "is_crisis": False}
 
 # ----------------- Authentication Routes -----------------
 @app.post("/auth/signup")
