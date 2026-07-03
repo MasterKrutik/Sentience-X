@@ -1,10 +1,11 @@
 import uvicorn
-from fastapi import FastAPI, HTTPException, status, Response, Request
+from fastapi import FastAPI, HTTPException, status, Response, Request, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import xgboost as xgb
 import numpy as np
 import os
+import io
 import json
 import sqlite3
 import hashlib
@@ -13,6 +14,15 @@ import time
 from collections import defaultdict
 from datetime import datetime
 from typing import List, Dict, Optional
+
+# --- Voice analysis dependencies (optional, graceful fallback if missing) ---
+_VOICE_DEPS_OK = False
+try:
+    import librosa
+    import soundfile as sf
+    _VOICE_DEPS_OK = True
+except ImportError:
+    pass
 
 app = FastAPI(title="SentienceX ML & Secure Authentication Service")
 
@@ -616,6 +626,177 @@ def counsel(req: CounselRequest):
         f"What aspect of your mental wellness would you like to explore today? "
         f"You can ask about your scores, sleep, stress, burnout, focus, breathing techniques, or anything else on your mind."
     ), "is_crisis": False}
+
+# ----------------- Voice Acoustic Analysis -----------------
+
+def _compute_voice_features(audio: np.ndarray, sr: int) -> dict:
+    """Compute real acoustic features from a mono float32 PCM array."""
+    duration = len(audio) / sr
+
+    # ── Signal quality ────────────────────────────────────────────────────────
+    frame_len = int(0.025 * sr)   # 25 ms frames
+    hop_len   = int(0.010 * sr)   # 10 ms hop
+    rms_frames = librosa.feature.rms(y=audio, frame_length=frame_len, hop_length=hop_len)[0]
+    noise_floor   = float(np.percentile(rms_frames, 10))
+    signal_level  = float(np.percentile(rms_frames, 90))
+    overall_rms   = float(np.sqrt(np.mean(audio ** 2)))
+    snr_db = 20.0 * np.log10((signal_level + 1e-10) / (noise_floor + 1e-10))
+
+    if duration < 2.0:
+        return {"analysis_quality": "too_short", "snr_db": round(snr_db, 1), "duration_s": round(duration, 1)}
+    if overall_rms < 0.004:
+        return {"analysis_quality": "too_quiet", "snr_db": round(snr_db, 1), "duration_s": round(duration, 1)}
+
+    analysis_quality = "good" if snr_db >= 15 else ("acceptable" if snr_db >= 8 else "poor")
+
+    # ── Pitch (F0) via probabilistic YIN ─────────────────────────────────────
+    f0, voiced_flag, _ = librosa.pyin(
+        audio,
+        fmin=float(librosa.note_to_hz('C2')),   # ~65 Hz
+        fmax=float(librosa.note_to_hz('C7')),   # ~2093 Hz
+        sr=sr,
+        frame_length=2048,
+        hop_length=512,
+    )
+    voiced_f0 = f0[voiced_flag & ~np.isnan(f0)]
+    voiced_fraction = float(np.sum(voiced_flag) / max(len(voiced_flag), 1))
+
+    if len(voiced_f0) < 8:
+        return {"analysis_quality": "no_speech", "snr_db": round(snr_db, 1), "duration_s": round(duration, 1)}
+
+    pitch_mean = float(np.mean(voiced_f0))
+    pitch_std  = float(np.std(voiced_f0))
+
+    # ── Jitter (relative, cycle-to-cycle F0 variation) ───────────────────────
+    f0_diffs  = np.abs(np.diff(voiced_f0))
+    jitter_pct = float(np.mean(f0_diffs) / (np.mean(voiced_f0) + 1e-10) * 100)
+    jitter_pct = round(min(jitter_pct, 30.0), 2)   # cap at 30% to suppress outliers
+
+    # ── Shimmer (relative amplitude variation over voiced frames) ────────────
+    amp_env = librosa.feature.rms(y=audio, frame_length=2048, hop_length=512)[0]
+    voiced_amp = amp_env[voiced_flag[:len(amp_env)]]
+    if len(voiced_amp) > 1:
+        amp_diffs   = np.abs(np.diff(voiced_amp))
+        shimmer_pct = float(np.mean(amp_diffs) / (np.mean(voiced_amp) + 1e-10) * 100)
+        shimmer_pct = round(min(shimmer_pct, 50.0), 2)
+    else:
+        shimmer_pct = 0.0
+
+    # ── Speech tempo via voiced onset counting ───────────────────────────────
+    onset_times   = librosa.onset.onset_detect(y=audio, sr=sr, units='time', backtrack=True)
+    speaking_dur  = voiced_fraction * duration
+    if speaking_dur > 0.5 and len(onset_times) > 0:
+        syllable_rate = len(onset_times) / speaking_dur
+        tempo_wpm = int(min(max(syllable_rate / 1.4 * 60, 50), 320))
+    else:
+        tempo_wpm = 0
+
+    # ── Spectral tilt (high-freq energy ratio → laryngeal effort proxy) ──────
+    stft_mag = np.abs(librosa.stft(audio, n_fft=2048, hop_length=512))
+    freqs    = librosa.fft_frequencies(sr=sr, n_fft=2048)
+    hf_mask  = freqs > 3000
+    total_e  = float(np.mean(stft_mag ** 2)) + 1e-10
+    hf_e     = float(np.mean(stft_mag[hf_mask] ** 2)) + 1e-10
+    spectral_tilt = hf_e / total_e
+
+    # ── Voice Strain Index (composite heuristic) ──────────────────────────────
+    # Components: jitter (max 50 pts) + shimmer (max 30 pts) + spectral tilt (max 20 pts)
+    strain_index = int(
+        min(jitter_pct * 20, 50) +
+        min(shimmer_pct * 8,  30) +
+        min(spectral_tilt * 800, 20)
+    )
+    strain_index = max(0, min(100, strain_index))
+
+    # ── Acoustic Affect Proxy (heuristic rule-based classifier) ─────────────
+    # Based on: Russell & Mehrabian arousal-valence model acoustic correlates
+    stress_score = fatigue_score = 0
+
+    if pitch_mean > 220: stress_score += 2
+    elif pitch_mean > 180: stress_score += 1
+
+    if pitch_std > 60: stress_score += 2
+    elif pitch_std > 40: stress_score += 1
+
+    if tempo_wpm > 170: stress_score += 2
+    elif tempo_wpm > 150: stress_score += 1
+
+    if jitter_pct > 2.0: stress_score += 1; fatigue_score += 1
+
+    if pitch_std < 20: fatigue_score += 3
+    elif pitch_std < 30: fatigue_score += 1
+
+    if 0 < tempo_wpm < 100: fatigue_score += 2
+    elif 0 < tempo_wpm < 120: fatigue_score += 1
+
+    if voiced_fraction < 0.4: fatigue_score += 2
+
+    if stress_score >= 4:
+        emotion_proxy, emotion_confidence = "stressed", round(min(0.40 + stress_score * 0.05, 0.75), 2)
+    elif fatigue_score >= 4:
+        emotion_proxy, emotion_confidence = "fatigued", round(min(0.40 + fatigue_score * 0.05, 0.75), 2)
+    else:
+        emotion_proxy, emotion_confidence = "calm", 0.55
+
+    return {
+        "jitter_pct":         jitter_pct,
+        "shimmer_pct":        shimmer_pct,
+        "tempo_wpm":          tempo_wpm,
+        "pitch_mean_hz":      round(pitch_mean, 1),
+        "pitch_variance":     round(pitch_std, 1),
+        "voiced_fraction":    round(voiced_fraction, 2),
+        "strain_index":       strain_index,
+        "emotion_proxy":      emotion_proxy,
+        "emotion_confidence": emotion_confidence,
+        "snr_db":             round(float(snr_db), 1),
+        "analysis_quality":   analysis_quality,
+        "duration_s":         round(duration, 1),
+    }
+
+
+@app.post("/voice/analyze")
+async def analyze_voice(file: UploadFile = File(...)):
+    """Accepts a WAV file (browser-encoded 16-bit PCM, 16kHz mono).
+    Returns real acoustic features: jitter, shimmer, tempo, strain index,
+    and a heuristic acoustic affect proxy.
+    Voice data is processed in-memory and never persisted.
+    """
+    if not _VOICE_DEPS_OK:
+        raise HTTPException(
+            status_code=503,
+            detail="Voice analysis unavailable: librosa/soundfile not installed on server."
+        )
+
+    audio_bytes = await file.read()
+    if len(audio_bytes) < 1000:
+        raise HTTPException(status_code=400, detail="Audio file too small to analyze.")
+
+    # Decode WAV (browser sends 16-bit PCM WAV after our client-side transcoding)
+    try:
+        with io.BytesIO(audio_bytes) as buf:
+            audio_data, sr = sf.read(buf, dtype='float32', always_2d=False)
+    except Exception as decode_err:
+        raise HTTPException(status_code=400, detail=f"Audio decoding failed: {decode_err}")
+
+    # Ensure mono
+    if audio_data.ndim == 2:
+        audio_data = audio_data.mean(axis=1)
+    audio_data = audio_data.astype(np.float32)
+
+    # Resample to 16kHz if necessary (librosa.resample uses soxr under the hood)
+    target_sr = 16000
+    if sr != target_sr:
+        audio_data = librosa.resample(audio_data, orig_sr=int(sr), target_sr=target_sr)
+        sr = target_sr
+
+    # Run feature extraction
+    try:
+        result = _compute_voice_features(audio_data, sr)
+    except Exception as analysis_err:
+        raise HTTPException(status_code=500, detail=f"Feature extraction error: {analysis_err}")
+
+    return result
+
 
 # ----------------- Authentication Routes -----------------
 @app.post("/auth/signup")
